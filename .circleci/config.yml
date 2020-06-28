@@ -1,5 +1,9 @@
 # use CircleCI 2.0
 version: 2.1
+general:
+  branches:
+    only:
+     - master # list of branches to build
 # parameters:
 parameters:
   GIT_BRANCH:
