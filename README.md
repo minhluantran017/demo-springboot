@@ -1,6 +1,8 @@
 # demo-springboot
-Demo Java Springboot
- 
+Demo Java Springboot micro-services application on Kubernetes environment.
+
+[![CircleCI](https://circleci.com/gh/minhluantran017/demo-springboot.svg?style=svg)](https://circleci.com/gh/minhluantran017/demo-springboot)
+
 ## Getting Started
 
 ### Prerequisites

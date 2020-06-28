@@ -10,15 +10,21 @@ pipeline {
       choice (name: 'DEPLOY_MODE', choices: ['test', 'staging'], description: 'Deploy mode')
    }
    environment {
-      GIT_URL        = 'https://github.com/minhluantran017/demo-springboot.git'
-      GIT_CRED       = 'github-api-cred'
+      GIT_URL        = 'ssh://git@github.com/minhluantran017/demo-springboot.git'
+      GIT_CRED       = 'github-ssh-cred'
+
+      // Anchore server URL should be set in Global environment variables of Jenkins 
+      // ANCHORE_URL = 'sec-tools.example.com'
+      ANCHORE_CRED   = 'anchore-usrpwd-cred'
+
+      // Docker registry URL should be set in Global environment variables of Jenkins 
+      // REGISTY_URL    = 'docker.io' or 'artifacts.example.com:5000'
+      REGISTRY_CRED  = 'artifact-api-cred'
+
       PRODUCT_RELEASE= '0.1.0'
       PRODUCT_VERSION= "${PRODUCT_RELEASE}-${BUILD_NUMBER}"
       APP_IMAGE      = 'minhluantran017/demo-springboot_app'
       DB_IMAGE       = 'minhluantran017/demo-springboot_db'
-      // Docker registry URL should be set in Global environment variables of Jenkins 
-      // REGISTY_URL    = 'docker.io' or 'artifacts.example.com:5000'
-      REGISTRY_CRED  = 'artifact-api-cred'
    }
    options {
       timestamps()
@@ -91,19 +97,34 @@ pipeline {
             }
          }
       }
-      stage('Analyze') {
-         steps {
-            print "Analyzing application..."
-            script {
-               print "Analyzing Docker image..."
-               withCredentials([usernamePassword(credentialsId: env.ANCHORE_CRED, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                  sh """
-                     curl -s https://ci-tools.anchore.io/inline_scan-latest | bash -s -- -u $USER -p $PASS -r $ANCHORE_URL ${APP_IMAGE}:${PRODUCT_VERSION}
-                     curl -s https://ci-tools.anchore.io/inline_scan-latest | bash -s -- -u $USER -p $PASS -r $ANCHORE_URL ${DB_IMAGE}:${PRODUCT_VERSION}
-                  """
+      stage('Security check') {
+         parallel {
+            stage('Analyze app') {
+               steps {
+                  print "Analyzing application..."
+                  script {
+                     withCredentials([usernamePassword(credentialsId: env.ANCHORE_CRED, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                        sh """
+                           curl -s https://ci-tools.anchore.io/inline_scan-latest | bash -s -- -u $USER -p $PASS -r ${ANCHORE_URL} ${APP_IMAGE}:${PRODUCT_VERSION}
+                        """
+                     }
+                  }
+               }
+            }
+            stage('Analyze DB') {
+               steps {
+                  print "Analyzing database..."
+                  script {
+                     withCredentials([usernamePassword(credentialsId: env.ANCHORE_CRED, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                        sh """
+                           curl -s https://ci-tools.anchore.io/inline_scan-latest | bash -s -- -u $USER -p $PASS -r ${ANCHORE_URL} ${DB_IMAGE}:${PRODUCT_VERSION}
+                        """
+                     }
+                  }
                }
             }
          }
+         
       }
       stage('Artifacts') {
          failFast true
@@ -216,5 +237,11 @@ pipeline {
    post {
       always {
          echo 'Sending email to user...'
+         emailext subject: "[Jenkins] ${JOB_NAME} Build#${BUILD_NUMBER} - ${BUILD_RESULT}",
+            body: """
+               ${JOB_NAME} Build#${BUILD_NUMBER} - ${BUILD_RESULT}.\n
+               Please see detail at ${BUILD_URL}.
+            """,
+            recipientProviders: [ requestor(), culprits() ]
       }
 }
