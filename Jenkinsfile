@@ -1,0 +1,247 @@
+pipeline {
+   agent {
+      docker {
+         image 'ubuntu:18.04'
+         args '-v /var/run/docker.sock:/var/run/docker.sock'
+      }
+   }
+   parameters {
+      string (name: 'GIT_BRANCH', defaultValue: 'master', description: 'Git branch to build')
+      choice (name: 'DEPLOY_MODE', choices: ['test', 'staging'], description: 'Deploy mode')
+   }
+   environment {
+      GIT_URL        = 'ssh://git@github.com/minhluantran017/demo-springboot.git'
+      GIT_CRED       = 'github-ssh-cred'
+
+      // Anchore server URL should be set in Global environment variables of Jenkins 
+      // ANCHORE_URL = 'sec-tools.example.com'
+      ANCHORE_CRED   = 'anchore-usrpwd-cred'
+
+      // Docker registry URL should be set in Global environment variables of Jenkins 
+      // REGISTY_URL    = 'docker.io' or 'artifacts.example.com:5000'
+      REGISTRY_CRED  = 'artifact-api-cred'
+
+      PRODUCT_RELEASE= '0.1.0'
+      PRODUCT_VERSION= "${PRODUCT_RELEASE}-${BUILD_NUMBER}"
+      APP_IMAGE      = 'minhluantran017/demo-springboot_app'
+      DB_IMAGE       = 'minhluantran017/demo-springboot_db'
+   }
+   options {
+      timestamps()
+   }
+   triggers {
+      cron ('0 8 * * 2,5')
+   }
+   stages {
+      stage('Prepare') {
+         steps {
+            print "Preparing environment..."
+            script {
+               currentBuild.name = "${params.GIT_BRANCH}-${BUILD_NUMBER}"
+
+               sh """
+                  apt update
+                  apt install -y curl wget git openjdk-8-jdk maven
+                  wget -qO- https://get.docker.com/ | sh
+                  curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+               """
+            }
+         }
+      }
+      stage('Checkout') {
+         steps {
+            print "Checking out code..."
+            git url: env.GIT_URL, branch: params.GIT_BRANCH, credential: env.GIT_CRED
+         }
+      }
+      stage('Build') {
+         steps {
+            print "Compiling code..."
+            script {
+               sh """
+                  mvn clean package \
+                     -Drelease=${PRODUCT_RELEASE} \
+                     -DbuildNumber=${BUILD_NUMBER}
+                  mkdir -p artifacts
+                  cp target/*.war artifacts/demo-springboot.war
+               """
+            }
+         }
+      }
+      stage('Package') {
+         failFast true
+         parallel {
+            stage('Package app') {
+               steps {
+                  print "Packaging app..."
+                  script {
+                     sh """
+                        docker build -f package/docker/app.dockerfile . -t ${APP_IMAGE}:${PRODUCT_VERSION}
+                        docker save ${APP_IMAGE}:${PRODUCT_VERSION} \
+                           -o artifacts/demo-springboot_app_${PRODUCT_VERSION}.tar
+                     """
+                  }
+               }
+            }
+            stage('Package db') {
+               steps {
+                  print "Packaging db..."
+                  script {
+                     sh """
+                        docker build -f package/docker/db.dockerfile . -t ${DB_IMAGE}:${PRODUCT_VERSION}
+                        docker save ${DB_IMAGE}:${PRODUCT_VERSION} \
+                           -o artifacts/demo-springboot_db_${PRODUCT_VERSION}.tar
+                     """
+                  }
+               }
+            }
+         }
+      }
+      stage('Security check') {
+         parallel {
+            stage('Analyze app') {
+               steps {
+                  print "Analyzing application..."
+                  script {
+                     withCredentials([usernamePassword(credentialsId: env.ANCHORE_CRED, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                        sh """
+                           curl -s https://ci-tools.anchore.io/inline_scan-latest | bash -s -- -u $USER -p $PASS -r ${ANCHORE_URL} ${APP_IMAGE}:${PRODUCT_VERSION}
+                        """
+                     }
+                  }
+               }
+            }
+            stage('Analyze DB') {
+               steps {
+                  print "Analyzing database..."
+                  script {
+                     withCredentials([usernamePassword(credentialsId: env.ANCHORE_CRED, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                        sh """
+                           curl -s https://ci-tools.anchore.io/inline_scan-latest | bash -s -- -u $USER -p $PASS -r ${ANCHORE_URL} ${DB_IMAGE}:${PRODUCT_VERSION}
+                        """
+                     }
+                  }
+               }
+            }
+         }
+         
+      }
+      stage('Artifacts') {
+         failFast true
+         parallel {
+            stage('Upload to artifactory') {
+               steps {
+                  print "Saving to artifactory..."
+                  dir('artifacts') {
+                     sh "md5sum * >>MD5SUMS.txt"
+                  }
+                  rtServer (
+                     id: "ArtifactoryServer",
+                     url: env.ARTIFACT_URL,
+                     credentialsId: env.ARTIFACT_CRED
+                  )
+                  rtUpload (
+                     serverId: "ArtifactoryServer",
+                     failNoOp: true,
+                     buildName: "demo-springboot",
+                     buildNumber: "${PRODUCT_VERSION}",
+                     spec:
+                     """{
+                        "files": [
+                           {
+                              "pattern": "artifacts/*",
+                              "target": "demo-springboot/${PRODUCT_RELEASE}/Artifacts/${BUILD_NUMBER}/"
+                           }
+                        ]
+                     }"""
+                  )
+                  rtPublishBuildInfo (
+                     serverId: "ArtifactoryServer",
+                     buildName: "demo-springboot",
+                     buildNumber: "${PRODUCT_VERSION}"
+                  )
+
+               }
+            }
+            stage('Upload to Docker registry') {
+               steps {
+                  script {
+                     withDockerRegistry(credentialsId: env.REGISTRY_CRED, url: env.REGISTY_URL) {
+                        print 'Uploading images...'
+                        sh """
+                           docker push ${APP_IMAGE}:${PRODUCT_VERSION}
+                           docker push ${APP_IMAGE}:${PRODUCT_VERSION}
+                        """
+                     }
+                  }
+               }
+            }
+         }
+      }
+      stage('Deploy to test') {
+         steps {
+            print "Deploying app to test environment..."
+            script {
+               print "TODO: Helm chart into test env"
+               sh "helm version"
+            }
+         }
+      }
+      stage('Functional test') {
+         steps {
+            script {
+               print 'Running functional test...'
+               sh """
+                  docker run -v ~/tests/functional:/etc/postman -t postman/newman:alpine \
+                     --environment="HTTPBinNewmanTest.json.postman_environment" \
+                     --reporters cli,junit --reporter-junit-export="tests/report/functional_report.xml"
+               """
+               junit allowEmptyResults: true, testResults: 'tests/reports/functional_report.xml'
+
+               print 'Destroying test environment...'
+               sh "helm version"
+            }
+         }
+      }
+      stage('Deploy to staging') {
+         when {
+             environment name: 'DEPLOY_MODE', value: 'staging'
+         }
+         steps {
+            print "Deploying app to staging environment..."
+            script {
+               print "TODO: Helm chart into staging env"
+               sh "helm version"
+            }
+         }
+      }
+      stage('Performance test') {
+         when {
+             environment name: 'DEPLOY_MODE', value: 'staging'
+         }
+         steps {
+            script {
+               sh """
+                  docker run -i -v ${PWD}/tests/:${PWD} -w ${PWD} justb4/jmeter \
+                     -JTARGET_HOST=${TARGET_HOST} \
+	                  -n -t performance/performance_suite.jmx -l performance/performance_report.jtl \
+	                  -e -o ./reports
+               """
+
+               print 'Destroying staging environment...'
+               sh "helm version"
+            }
+         }
+      }
+   }
+   post {
+      always {
+         echo 'Sending email to user...'
+         emailext subject: "[Jenkins] ${JOB_NAME} Build#${BUILD_NUMBER} - ${BUILD_RESULT}",
+            body: """
+               ${JOB_NAME} Build#${BUILD_NUMBER} - ${BUILD_RESULT}.\n
+               Please see detail at ${BUILD_URL}.
+            """,
+            recipientProviders: [ requestor(), culprits() ]
+      }
+}
