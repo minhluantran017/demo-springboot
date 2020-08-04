@@ -61,7 +61,8 @@ pipeline {
                sh """
                   mvn clean package \
                      -Drelease=${PRODUCT_RELEASE} \
-                     -DbuildNumber=${BUILD_NUMBER}
+                     -DbuildNumber=${BUILD_NUMBER} \
+                     -DmongoHost=127.0.0.1
                   mkdir -p artifacts
                   cp target/*.war artifacts/demo-springboot.war
                """
