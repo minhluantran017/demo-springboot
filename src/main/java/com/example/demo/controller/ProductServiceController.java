@@ -16,6 +16,14 @@ import com.example.demo.model.Product;
 
 @RestController
 public class ProductServiceController {
+
+   /* 
+    * * * * * * * * * * * * * * * * * * *
+    * API version 1
+    * Product repository save in local Java
+    * * * * * * * * * * * * * * * * * * *
+    */
+
    private static Map<String, Product> productRepo = new HashMap<>();
    static {
       Product iphonex = new Product();
@@ -33,6 +41,7 @@ public class ProductServiceController {
       productRepo.put(iphonexx.getId(), iphonexx);
    }
 
+   // Update a product
    @RequestMapping(value = "api/v1/products/{id}", method = RequestMethod.PUT)
    public ResponseEntity<Object> updateProduct(@PathVariable("id") String id, @RequestBody Product product) { 
       if (productRepo.containsKey(id)) {
@@ -45,6 +54,7 @@ public class ProductServiceController {
          return new ResponseEntity<Object>("Product not found", HttpStatus.NOT_FOUND);
    }
 
+   // Create a product
    @RequestMapping(value = "api/v1/products/{name}", method = RequestMethod.POST)
    public ResponseEntity<Object> createProduct(@PathVariable("name") String name, @RequestBody Product product) {
       String id=UUID.randomUUID().toString();
@@ -58,11 +68,13 @@ public class ProductServiceController {
       }
    }
 
+   // Get all products
    @RequestMapping(value = "api/v1/products")
    public ResponseEntity<Object> getProduct() {
       return new ResponseEntity<>(productRepo.values(), HttpStatus.OK);
    }
 
+   // Get a product
    @RequestMapping(value = "api/v1/products/{id}")
    public ResponseEntity<Object> getProductDetail(@PathVariable("id") String id) {
       if (productRepo.containsKey(id)) {
@@ -72,8 +84,9 @@ public class ProductServiceController {
             return new ResponseEntity<Object>("Product not found", HttpStatus.NOT_FOUND);
    }
 
+   // Delete a product
    @RequestMapping(value = "api/v1/products/{id}", method = RequestMethod.DELETE)
-   public ResponseEntity<Object> delete(@PathVariable("id") String id) { 
+   public ResponseEntity<Object> deleteProduct(@PathVariable("id") String id) { 
       if (productRepo.containsKey(id)) {
          productRepo.remove(id);
          return new ResponseEntity<>("Product is deleted successsfully", HttpStatus.OK);
