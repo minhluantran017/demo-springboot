@@ -19,8 +19,6 @@ Tags: <mark>DevOps</mark>, <mark>Java</mark>, <mark>microservices</mark>, <mark>
 
 ### Prerequisites
 
-* Java 8
-* Apache Maven
 * Docker
 * Helm
 
@@ -41,10 +39,13 @@ export BUILD_NUMBER=01
 ```
 
 ```sh
-mvn clean package \
+docker run -i -t --rm -v "$HOME"/.m2:/root/.m2 \
+    -v "$PWD":/usr/src/app -w /usr/src/app maven:3-jdk-8 \
+    mvn clean package \
     -Drelease=${PRODUCT_RELEASE} \
     -DbuildNumber=${BUILD_NUMBER} \
     -DmongoHost=127.0.0.1
+
 mkdir -p artifacts
 cp target/*.war artifacts/demo-springboot.war
 ```
@@ -88,7 +89,15 @@ docker push ${YOUR_REPO}/demo-springboot_db:${PRODUCT_RELEASE}-${BUILD_NUMBER}
 
 ### Deploying application
 
-WIP
+Deploy onto local machine with Docker:
+```sh
+docker run -d -i -t --rm -p 27017:27017 \
+    --name demo-springboot_db \
+    demo-springboot_db:${PRODUCT_RELEASE}-${BUILD_NUMBER}
+docker run -d -i -t --rm -p 8080:8080 \
+    --name demo-springboot_app \
+    demo-springboot_app:${PRODUCT_RELEASE}-${BUILD_NUMBER}
+```
 
 ### Running test suite
 
