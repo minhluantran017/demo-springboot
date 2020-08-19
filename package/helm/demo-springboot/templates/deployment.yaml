@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "demo-springboot.fullname" . }}
+  labels:
+    {{- include "demo-springboot.labels" . | nindent 4 }}
+spec:
+{{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+{{- end }}
+  selector:
+    matchLabels:
+      {{- include "demo-springboot.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+    {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      labels:
+        {{- include "demo-springboot.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "demo-springboot.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}-app
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "minhluantran017/demo-springboot_app:{{ .Values.ImageTag | default .Chart.AppVersion }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: tomcat
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: tomcat
+          readinessProbe:
+            httpGet:
+              path: /
+              port: tomcat
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+        - name: {{ .Chart.Name }}-db
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "minhluantran017/demo-springboot_app:{{ .Values.ImageTag | default .Chart.AppVersion }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: mongo
+              containerPort: 27017
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: mongo
+          readinessProbe:
+            httpGet:
+              path: /
+              port: mongo
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

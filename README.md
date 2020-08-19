@@ -99,6 +99,13 @@ docker run -d -i -t --rm -p 8080:8080 \
     demo-springboot_app:${PRODUCT_RELEASE}-${BUILD_NUMBER}
 ```
 
+Deploy onto remote Kubernetes environment:
+```sh
+helm install phone-price ./package/helm/demo-springboot/
+export POD_NAME=$(kubectl get pods --namespace default -l "app.kubernetes.io/name=demo-springboot,app.kubernetes.io/instance=productv2" -o jsonpath="{.items[0].metadata.name}")
+kubectl --namespace default port-forward $POD_NAME 8080:8080
+```
+
 ### Running test suite
 
 WIP
