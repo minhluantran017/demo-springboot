@@ -173,7 +173,6 @@ pipeline {
                   ${NEWMAN} --color off postman_api.json--environment=postman_environment.json \
                      --reporters cli,junit --reporter-junit-export="newman-report.xml"
                """
-               junit allowEmptyResults: true, testResults: 'tests/functional/newman-report.xml'
             }
          }
       }
@@ -208,6 +207,7 @@ pipeline {
    }
    post {
       always {
+         junit allowEmptyResults: true, testResults: 'tests/functional/newman-report.xml'
          echo 'Sending email to user...'
          emailext subject: "[Jenkins] ${JOB_NAME} Build #${BUILD_NUMBER} - ${BUILD_RESULT}",
             body: """
