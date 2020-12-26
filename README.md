@@ -21,17 +21,39 @@ Tags: <mark>DevOps</mark>, <mark>Java</mark>, <mark>microservices</mark>, <mark>
 
 * Docker
 * Helm
+* kubectl
+* A Kubernetes cluster to deploy onto
 
-### Clone the code
+### Cloning code
 
 ```sh
 git clone https://github.com/minhluantran017/demo-springboot.git
 cd demo-springboot
 ```
 
+The directory structure is as below:
+```
+(root)
+|___artifacts           --->> Store binaries for each steps
+|___build               --->> Contains build scripts
+|   |___docker
+|___deploy              --->> Contains deploy scripts
+|   |___docker-compose
+|   |___helm
+|___lib                 --->> Contains shared libraries
+|___src                 --->> Contains source code
+|___tests               --->> Contains automation test scripts
+|   |___integration
+|   |___functional
+|   |___performance
+|___pom.xml
+|___README.md
+```
+
 ### Creating war file
 
-You should specify the `PRODUCT_RELEASE` and `BUILD_NUMBER` environment variables before taking next steps:
+You should specify the `PRODUCT_RELEASE` and `BUILD_NUMBER` environment variables 
+before taking next steps:
 
 ```sh
 export PRODUCT_RELEASE=2.0.0
@@ -43,25 +65,24 @@ docker run -i -t --rm -v "$HOME"/.m2:/root/.m2 \
     -v "$PWD":/usr/src/app -w /usr/src/app maven:3-jdk-8 \
     mvn clean package \
     -Drelease=${PRODUCT_RELEASE} \
-    -DbuildNumber=${BUILD_NUMBER} \
-    -DmongoHost=127.0.0.1
+    -DbuildNumber=${BUILD_NUMBER}
 
-mkdir -p artifacts
+rm -rf artifacts && mkdir -p artifacts
 cp target/*.war artifacts/demo-springboot.war
 ```
 
-### Packaging the image
+### Building the image
 
-Package application Docker image:
+Build application Docker image:
 
 ```sh
-docker build -f package/docker/app.dockerfile . -t demo-springboot_app:${PRODUCT_RELEASE}-${BUILD_NUMBER}
+docker build -f build/docker/app.dockerfile . -t demo-springboot_app:${PRODUCT_RELEASE}-${BUILD_NUMBER}
 ```
 
-Package database Docker image:
+Build database Docker image:
 
 ```sh
-docker build -f package/docker/db.dockerfile . -t demo-springboot_db:${PRODUCT_RELEASE}-${BUILD_NUMBER}
+docker build -f build/docker/db.dockerfile . -t demo-springboot_db:${PRODUCT_RELEASE}-${BUILD_NUMBER}
 ```
 
 Push Docker image to Docker repository:
@@ -89,24 +110,31 @@ docker push ${YOUR_REPO}/demo-springboot_db:${PRODUCT_RELEASE}-${BUILD_NUMBER}
 
 ### Deploying application
 
-Deploy onto local machine with Docker:
+#### Local machine
+
 ```sh
-docker run -d -i -t --rm -p 27017:27017 \
-    --name demo-springboot_db \
-    demo-springboot_db:${PRODUCT_RELEASE}-${BUILD_NUMBER}
-docker run -d -i -t --rm -p 8080:8080 \
-    --name demo-springboot_app \
-    demo-springboot_app:${PRODUCT_RELEASE}-${BUILD_NUMBER}
+docker-compose -f deploy/docker-compose/compose.yml up
 ```
 
-Deploy onto remote Kubernetes environment:
+Then, these endpoints are accessible: 
+- http://localhost:8080/demo-springboot/api/v1/products
+- http://localhost:8080/demo-springboot/api/v2/products
+
+To tear down:
+
 ```sh
-helm install phone-price ./package/helm/demo-springboot/
+docker-compose -f deploy/docker-compose/compose.yml down
+```
+
+#### Kubernetes cluster
+
+```sh
+helm install phone-price deploy/helm/demo-springboot/
 export POD_NAME=$(kubectl get pods --namespace default -l "app.kubernetes.io/name=demo-springboot,app.kubernetes.io/instance=productv2" -o jsonpath="{.items[0].metadata.name}")
-kubectl --namespace default port-forward $POD_NAME 8080:8080
+kubectl --namespace default port-forward ${POD_NAME} 8080:8080
 ```
 
-### Running test suite
+### Running test suites
 
 WIP
 

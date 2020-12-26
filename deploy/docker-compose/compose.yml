@@ -1,0 +1,13 @@
+version: "3"
+services:
+  database:
+    image:  minhluantran017/demo-springboot_db:${PRODUCT_RELEASE}-${BUILD_NUMBER}
+    container_name: "database"
+    ports:
+      - 27017:27017
+  backend:
+    image:  minhluantran017/demo-springboot_app:${PRODUCT_RELEASE}-${BUILD_NUMBER}
+    ports:
+      - 8080:8080
+    links:
+      - database
