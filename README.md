@@ -4,7 +4,10 @@ Demo Java Springboot micro-services application on Kubernetes environment.
 ![](https://img.shields.io/badge/Environment-Kubernetes-blue)
 [![](https://img.shields.io/badge/Owner-minhluantran017-darkviolet)](mailto:minhluantran017@gmail.com)
 
-Tags: <mark>DevOps</mark>, <mark>Java</mark>, <mark>microservices</mark>, <mark>Kubernetes</mark>
+* Platform: Docker, Kuberneters
+* Stack: Java Springboot, MongoDB
+* Continuous Integration: Jenkins, CircleCI
+* Continuous Delivery: Jenkins
 
 ***PROJECT STATUS:***
 
@@ -12,17 +15,17 @@ Tags: <mark>DevOps</mark>, <mark>Java</mark>, <mark>microservices</mark>, <mark>
 
 - [x] Development
 - [x] Building and Packaging
-- [ ] Deployment
+- [x] Deployment
 - [ ] Testing
 
 ## Getting Started
 
 ### Prerequisites
 
-* Docker
-* Helm
-* kubectl
-* A Kubernetes cluster to deploy onto
+* `docker`, `docker-compose`
+* `helm`
+* `kubectl`
+* A Kubernetes cluster (eg. minikube, microK8s, EKS, ...)
 
 ### Cloning code
 
@@ -112,6 +115,8 @@ docker push ${YOUR_REPO}/demo-springboot_db:${PRODUCT_RELEASE}-${BUILD_NUMBER}
 
 #### Local machine
 
+Bring up the local stack with `docker-compose`:
+
 ```sh
 docker-compose -f deploy/docker-compose/compose.yml up
 ```
@@ -123,13 +128,22 @@ Then, these endpoints are accessible:
 To tear down:
 
 ```sh
-docker-compose -f deploy/docker-compose/compose.yml down
+docker-compose -f deploy/docker-compose/compose.yml down -v
 ```
 
 #### Kubernetes cluster
 
+We use helm chart to deploy application onto Kubernetes.
+
 ```sh
-helm install phone-price deploy/helm/demo-springboot/
+helm install phone-price deploy/helm/demo-springboot/ \
+   --set ImageTag="${PRODUCT_RELEASE}-${BUILD_NUMBER}"
+```
+
+Since this is for demo purpose only, we do not have Ingress.
+Port forwarding is the best chioce:
+
+```sh
 export POD_NAME=$(kubectl get pods --namespace default -l "app.kubernetes.io/name=demo-springboot,app.kubernetes.io/instance=productv2" -o jsonpath="{.items[0].metadata.name}")
 kubectl --namespace default port-forward ${POD_NAME} 8080:8080
 ```
