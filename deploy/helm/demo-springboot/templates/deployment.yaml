@@ -31,7 +31,7 @@ spec:
         - name: {{ .Chart.Name }}-app
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "minhluantran017/demo-springboot_app:{{ .Values.ImageTag | default .Chart.AppVersion }}"
+          image: "{{ .Values.ImageRepo }}/demo-springboot_app:{{ .Values.ImageTag | default .Chart.AppVersion }}"
           imagePullPolicy: IfNotPresent
           ports:
             - name: tomcat
@@ -50,7 +50,7 @@ spec:
         - name: {{ .Chart.Name }}-db
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "minhluantran017/demo-springboot_app:{{ .Values.ImageTag | default .Chart.AppVersion }}"
+          image: "{{ .Values.ImageRepo }}/demo-springboot_app:{{ .Values.ImageTag | default .Chart.AppVersion }}"
           imagePullPolicy: IfNotPresent
           ports:
             - name: mongo

@@ -4,7 +4,8 @@
 
 replicaCount: 1
 
-ImageTag: "2.0.0-01"
+ImageRepo: "minhluantran017"
+ImageTag: "0.0.0-0"
 
 imagePullSecrets: []
 nameOverride: ""

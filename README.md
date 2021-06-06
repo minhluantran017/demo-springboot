@@ -59,16 +59,14 @@ You should specify the `PRODUCT_RELEASE` and `BUILD_NUMBER` environment variable
 before taking next steps:
 
 ```sh
-export PRODUCT_RELEASE=2.0.0
-export BUILD_NUMBER=01
+export VERSION_STRING=$(git describe --tags --long --always --dirty)
 ```
 
 ```sh
 docker run -i -t --rm -v "$HOME"/.m2:/root/.m2 \
     -v "$PWD":/usr/src/app -w /usr/src/app maven:3-jdk-8 \
     mvn clean package \
-    -Drelease=${PRODUCT_RELEASE} \
-    -DbuildNumber=${BUILD_NUMBER}
+    -DversionString=${VERSION_STRING}
 
 rm -rf artifacts && mkdir -p artifacts
 cp target/*.war artifacts/demo-springboot.war
@@ -79,13 +77,13 @@ cp target/*.war artifacts/demo-springboot.war
 Build application Docker image:
 
 ```sh
-docker build -f build/docker/app.dockerfile . -t demo-springboot_app:${PRODUCT_RELEASE}-${BUILD_NUMBER}
+docker build -f build/docker/app.dockerfile . -t demo-springboot_app:${VERSION_STRING}
 ```
 
 Build database Docker image:
 
 ```sh
-docker build -f build/docker/db.dockerfile . -t demo-springboot_db:${PRODUCT_RELEASE}-${BUILD_NUMBER}
+docker build -f build/docker/db.dockerfile . -t demo-springboot_db:${VERSION_STRING}
 ```
 
 Push Docker image to Docker repository:
@@ -101,14 +99,14 @@ $(aws ecr get-login)
 
 
 # Tag your images
-docker tag demo-springboot_app:${PRODUCT_RELEASE}-${BUILD_NUMBER} \
-    ${YOUR_REPO}/demo-springboot_app:${PRODUCT_RELEASE}-${BUILD_NUMBER}
-docker tag demo-springboot_db:${PRODUCT_RELEASE}-${BUILD_NUMBER} \
-    ${YOUR_REPO}/demo-springboot_db:${PRODUCT_RELEASE}-${BUILD_NUMBER}
+docker tag demo-springboot_app:${VERSION_STRING} \
+    ${YOUR_REPO}/demo-springboot_app:${VERSION_STRING}
+docker tag demo-springboot_db:${VERSION_STRING} \
+    ${YOUR_REPO}/demo-springboot_db:${VERSION_STRING}
 
 # Push Docker images to repository:
-docker push ${YOUR_REPO}/demo-springboot_app:${PRODUCT_RELEASE}-${BUILD_NUMBER}
-docker push ${YOUR_REPO}/demo-springboot_db:${PRODUCT_RELEASE}-${BUILD_NUMBER}
+docker push ${YOUR_REPO}/demo-springboot_app:${VERSION_STRING}
+docker push ${YOUR_REPO}/demo-springboot_db:${VERSION_STRING}
 ```
 
 ### Deploying application
@@ -137,7 +135,7 @@ We use helm chart to deploy application onto Kubernetes.
 
 ```sh
 helm install phone-price deploy/helm/demo-springboot/ \
-   --set ImageTag="${PRODUCT_RELEASE}-${BUILD_NUMBER}"
+   --set ImageTag="${VERSION_STRING}"
 ```
 
 Since this is for demo purpose only, we do not have Ingress.
