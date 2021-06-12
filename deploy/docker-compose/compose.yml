@@ -1,12 +1,16 @@
 version: "3"
 services:
   database:
-    image:  minhluantran017/demo-springboot_db:${VERSION_STRING}
+    image: mongo:3
     container_name: "database"
     ports:
       - 27017:27017
-  backend:
-    image:  minhluantran017/demo-springboot_app:${VERSION_STRING}
+    environment:
+      - MONGO_INITDB_DATABASE=productDb
+
+  application:
+    image:  minhluantran017/demo-springboot:${VERSION_STRING}
+    container_name: "application"
     ports:
       - 8080:8080
     links:

@@ -1,22 +1,22 @@
 # demo-springboot
-Demo Java Springboot micro-services application on Kubernetes environment.
+Demo Java Springboot application on Kubernetes environment.
 
-![](https://img.shields.io/badge/Environment-Kubernetes-blue)
 [![](https://img.shields.io/badge/Owner-minhluantran017-darkviolet)](mailto:minhluantran017@gmail.com)
-
-* Platform: Docker, Kuberneters
-* Stack: Java Springboot, MongoDB
-* Continuous Integration: Jenkins, CircleCI
-* Continuous Delivery: Jenkins
+![](https://img.shields.io/badge/-microservices-green)
+![](https://img.shields.io/badge/-Java-red)
+![](https://img.shields.io/badge/-Docker-blue)
+![](https://img.shields.io/badge/-Kubernetes-blue)
+![](https://img.shields.io/badge/-Jenkins-orange)
+![](https://img.shields.io/badge/-Helm-blue)
 
 ***PROJECT STATUS:***
 
-[![CircleCI](https://circleci.com/gh/minhluantran017/demo-springboot.svg?style=svg)](https://circleci.com/gh/minhluantran017/demo-springboot)
-
-- [x] Development
-- [x] Building and Packaging
-- [x] Deployment
-- [ ] Testing
+- [x] Develop
+- [x] Build
+- [x] Bake
+- [x] Deploy
+- [ ] Test
+- [ ] Release
 
 ## Getting Started
 
@@ -40,6 +40,7 @@ The directory structure is as below:
 |___artifacts           --->> Store binaries for each steps
 |___build               --->> Contains build scripts
 |   |___docker
+|___ci                  --->> Contains CI/CD workflows
 |___deploy              --->> Contains deploy scripts
 |   |___docker-compose
 |   |___helm
@@ -55,19 +56,25 @@ The directory structure is as below:
 
 ### Creating war file
 
-You should specify the `PRODUCT_RELEASE` and `BUILD_NUMBER` environment variables 
+You should specify the `VERSION_STRING` environment variables 
 before taking next steps:
 
 ```sh
 export VERSION_STRING=$(git describe --tags --long --always --dirty)
+echo $VERSION_STRING
 ```
+
+Compile Java and create WAR file with Apache maven:
 
 ```sh
 docker run -i -t --rm -v "$HOME"/.m2:/root/.m2 \
-    -v "$PWD":/usr/src/app -w /usr/src/app maven:3-jdk-8 \
-    mvn clean package \
-    -DversionString=${VERSION_STRING}
+    -v "$PWD":/app -w /app maven:3-jdk-8 \
+    mvn clean package -DversionString=${VERSION_STRING}
+```
 
+Produced artifacts should be moved to `artifacts` directory to push to artifactory:
+
+```sh
 rm -rf artifacts && mkdir -p artifacts
 cp target/*.war artifacts/demo-springboot.war
 ```
@@ -77,20 +84,14 @@ cp target/*.war artifacts/demo-springboot.war
 Build application Docker image:
 
 ```sh
-docker build -f build/docker/app.dockerfile . -t demo-springboot_app:${VERSION_STRING}
-```
-
-Build database Docker image:
-
-```sh
-docker build -f build/docker/db.dockerfile . -t demo-springboot_db:${VERSION_STRING}
+docker build -f build/docker/Dockerfile . -t demo-springboot:${VERSION_STRING}
 ```
 
 Push Docker image to Docker repository:
 ```sh
 # Log into the Docker repository
 ### If you use Docker Hub...
-YOUR_REPO=minhluantran017 # This is an example
+YOUR_REPO=minhluantran017
 docker login
 
 ### If you use AWS ECR (Elastic Container Registry)
@@ -98,15 +99,12 @@ YOUR_REPO=xxxxx.dkr.ecr.<region>.amazonaws.com
 $(aws ecr get-login)
 
 
-# Tag your images
-docker tag demo-springboot_app:${VERSION_STRING} \
-    ${YOUR_REPO}/demo-springboot_app:${VERSION_STRING}
-docker tag demo-springboot_db:${VERSION_STRING} \
-    ${YOUR_REPO}/demo-springboot_db:${VERSION_STRING}
+# Tag your image
+docker tag demo-springboot:${VERSION_STRING} \
+    ${YOUR_REPO}/demo-springboot:${VERSION_STRING}
 
-# Push Docker images to repository:
-docker push ${YOUR_REPO}/demo-springboot_app:${VERSION_STRING}
-docker push ${YOUR_REPO}/demo-springboot_db:${VERSION_STRING}
+# Push Docker image to repository:
+docker push ${YOUR_REPO}/demo-springboot:${VERSION_STRING}
 ```
 
 ### Deploying application
@@ -139,7 +137,7 @@ helm install phone-price deploy/helm/demo-springboot/ \
 ```
 
 Since this is for demo purpose only, we do not have Ingress.
-Port forwarding is the best chioce:
+Port forwarding is the best choice:
 
 ```sh
 export POD_NAME=$(kubectl get pods --namespace default -l "app.kubernetes.io/name=demo-springboot,app.kubernetes.io/instance=productv2" -o jsonpath="{.items[0].metadata.name}")
@@ -152,10 +150,8 @@ WIP
 
 ## CI/CD integration
 
-This project is configured for CI/CD on Jenkins and CircleCI.
-All configurations are under `.jenkins`/`.circleci` directory.
-
-More CI/CD tools will be added (depends on my freetime).
+This project is configured for CI/CD on Jenkins.
+All configurations are under `ci` directory.
 
 ## Branching
 

@@ -6,52 +6,47 @@ pipeline {
    }
 
    environment {
-      PRODUCT_RELEASE   = '0.1.0'
-      PRODUCT_VERSION   = "${PRODUCT_RELEASE}-${BUILD_NUMBER}"
-      APP_IMAGE         = 'minhluantran017/demo-springboot_app'
-      DB_IMAGE          = 'minhluantran017/demo-springboot_db'
-
+      APP_IMAGE         = 'minhluantran017/demo-springboot'
       // Anchore server URL should be set in Global environment variables of Jenkins 
-      // ANCHORE_URL    = 'sec-tools.example.com'
+      ANCHORE_URL       = 'minhluantran017.tk/anchore'
       ANCHORE_CRED      = credentials('anchore-usrpwd-cred')
-
       // Artifactory URL should be set in Global environment variables of Jenkins
-      // ARTIFACTORY_URL= 'http://artifactory.example.com:8081/artifactory'
+      ARTIFACTORY_URL   = 'http://minhluantran017.tk/artifactory'
       ARTIFACTORY_CRED  = credentials('artifactory-api-cred')
-      ARTIFACTORY_PATH  = "demo-springboot/${PRODUCT_RELEASE}/Artifacts/${BUILD_NUMBER}"
-
       // Docker registry URL should be set in Global environment variables of Jenkins 
-      // REGISTRY_URL   = 'docker.io' or 'artifacts.example.com:5000'
+      REGISTRY_URL      = 'docker.io'
       REGISTRY_CRED     = 'registry-api-cred'
-
       // Kubernetes kube config file
-      K8S_CONFIG        = credentials("k8s-${DEPLOY_MODE}-config-file")
+      K8S_CONFIG        = credentials("k8s-test-config-file")
 
-      MAVEN    = "docker run -it --rm -v ${WORKSPACE}:/apps -w /apps maven:3-jdk-8 mvn"
-      NEWMAN   = "docker run -it -v ${WORKSPACE}/tests/functional:/test -w /test postman/newman:5-alpine newman"
-      JMETER   = "docker run -it -v ${WORKSPACE}/tests/performance:/test -w /test justb4/jmeter jmeter"
       ANCHORE  = "curl -s https://ci-tools.anchore.io/inline_scan-latest | bash -s -- \
                      -u ${ANCHORE_CRED_USER} -p ${ANCHORE_CRED_PSW} -r ${ANCHORE_URL}"
-      HELM     = "docker run -it --rm -v ${WORKSPACE}:/apps -w /apps \
+      MAVEN    = "docker run -it -v ${WORKSPACE}:/app -w /app maven:3-jdk-8 mvn"
+      NEWMAN   = "docker run -it -v ${WORKSPACE}/tests/functional:/test -w /test postman/newman:5-alpine newman"
+      JMETER   = "docker run -it -v ${WORKSPACE}/tests/performance:/test -w /test justb4/jmeter jmeter"
+      HELM     = "docker run -it -v ${WORKSPACE}/deploy/helm/demo-springboot:/app -w /app \
                   -v ${K8S_CONFIG}:/root/.kube/config alpine/helm:3-alpine helm"
    }
+
    options {
       timestamps()
       timeout(60)
-      buildDiscarder logRotator(artifactDaysToKeepStr: '10', artifactNumToKeepStr: '100', 
+      buildDiscarder logRotator(artifactDaysToKeepStr: '10', artifactNumToKeepStr: '100',
                                  daysToKeepStr: '30', numToKeepStr: '300')
    }
+
    triggers {
-      // Trigger at 8am daily 
-      cron ('0 8 * * *')
+      cron ('0 8 * * *') // Trigger at 8am daily 
    }
+
    stages {
       stage('Compile') {
          steps {
             print "Compiling code..."
             script {
+               env.VERSION_STRING = sh(returnStdout: true, script: 'git describe --tags --long --always --dirty').trim()
                sh """
-                  ${MAVEN} clean package -Drelease=${PRODUCT_RELEASE} -DbuildNumber=${BUILD_NUMBER}
+                  ${MAVEN} clean package -DversionString=${VERSION_STRING}
                   mkdir -p artifacts
                   cp target/*.war artifacts/demo-springboot.war
                """
@@ -59,53 +54,24 @@ pipeline {
          }
       }
       stage('Package') {
-         parallel {
-            stage('Package::App') {
-               steps {
-                  print "Packaging app..."
-                  script {
-                     sh """
-                        docker build -f build/docker/app.dockerfile . -t ${APP_IMAGE}:${PRODUCT_VERSION}
-                        docker save ${APP_IMAGE}:${PRODUCT_VERSION} \
-                           -o artifacts/demo-springboot_app_${PRODUCT_VERSION}.tar
-                     """
-                  }
-               }
-            }
-            stage('Package::Database') {
-               steps {
-                  print "Packaging db..."
-                  script {
-                     sh """
-                        docker build -f build/docker/db.dockerfile . -t ${DB_IMAGE}:${PRODUCT_VERSION}
-                        docker save ${DB_IMAGE}:${PRODUCT_VERSION} \
-                           -o artifacts/demo-springboot_db_${PRODUCT_VERSION}.tar
-                     """
-                  }
-               }
+         steps {
+            print "Packaging application..."
+            script {
+               sh """
+                  docker build -f build/docker/Dockerfile . -t ${APP_IMAGE}:${VERSION_STRING}
+                  docker save ${APP_IMAGE}:${VERSION_STRING} \
+                     -o artifacts/demo-springboot_${VERSION_STRING}.tar
+               """
             }
          }
       }
       stage('Analyze') {
-         parallel {
-            stage('Analyze::App') {
-               steps {
-                  print "Analyzing application..."
-                  script {
-                     sh "${ANCHORE} ${APP_IMAGE}:${PRODUCT_VERSION}"
-                  }
-               }
-            }
-            stage('Analyze::Database') {
-               steps {
-                  print "Analyzing database..."
-                  script {
-                     sh "${ANCHORE} ${DB_IMAGE}:${PRODUCT_VERSION}"
-                  }
-               }
+         steps {
+            print "Analyzing application..."
+            script {
+               sh "${ANCHORE} ${APP_IMAGE}:${VERSION_STRING}"
             }
          }
-         
       }
       stage('Upload') {
          parallel {
@@ -117,7 +83,7 @@ pipeline {
                         md5sum * >> MD5SUMS.txt
                         for file in `ls .`; do
                            curl -s -X PUT -H "X-JFrog-Art-Api:${ARTIFACTORY_CRED}" -T ${file}\
-                              "${ARTIFACTORY_URL}/${ARTIFACTORY_PATH}/"
+                              "${ARTIFACTORY_URL}/artifacts/demo-springboot/${VERSION_STRING}/"
                         done
                      """
                   }
@@ -129,8 +95,7 @@ pipeline {
                      withDockerRegistry(credentialsId: env.REGISTRY_CRED, url: env.REGISTY_URL) {
                         print 'Uploading images to registry...'
                         sh """
-                           docker push ${APP_IMAGE}:${PRODUCT_VERSION}
-                           docker push ${APP_IMAGE}:${PRODUCT_VERSION}
+                           docker push ${APP_IMAGE}:${VERSION_STRING}
                         """
                      }
                   }
@@ -139,43 +104,16 @@ pipeline {
          }
       }
       stage('Deploy') {
-         parallel {
-            stage('Deploy::Dev') {
-               steps {
-                  print "Deploying app to dev environment..."
-                  script {
-                     sh "docker-compose -f deploy/docker-compose/compose.yml up -d"
-                  }
-               }
-            }
-            stage('Deploy::Test') {
-               environment {
-                  MODE = 'test'
-               }
-               steps {
-                  print "Deploying app to test environment..."
-                  script {
-                     print "TODO: Helm chart into test env"
-                     sh "${HELM} version"
-                  }
-               }
-            }
-            stage('Deploy::Staging') {
-               environment {
-                  MODE = 'staging'
-               }
-               steps {
-                  print "Deploying app to staging environment..."
-                  script {
-                     print "TODO: Helm chart into staging env"
-                     sh "${HELM} version"
-                  }
-               }
+         steps {
+            print "Deploying app to test environment..."
+            script {
+               print "TODO: Helm chart into test env"
+               sh "${HELM} version"
             }
          }
       }
       stage('Test') {
-         parallel {
+         stages {
             stage('Test::Integration') {
                steps {
                   print 'Running integration test...'
@@ -220,7 +158,7 @@ pipeline {
    }
    post {
       always {
-         echo 'Sending email to user...'
+         print 'Sending email to user...'
          emailext(
             subject: "[Jenkins] ${JOB_NAME} Build #${BUILD_NUMBER} - ${BUILD_RESULT}",
             body: """

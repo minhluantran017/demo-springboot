@@ -31,7 +31,7 @@ spec:
         - name: {{ .Chart.Name }}-app
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.ImageRepo }}/demo-springboot_app:{{ .Values.ImageTag | default .Chart.AppVersion }}"
+          image: "{{ .Values.ImageName }}:{{ .Values.ImageTag | default .Chart.AppVersion }}"
           imagePullPolicy: IfNotPresent
           ports:
             - name: tomcat
@@ -50,12 +50,15 @@ spec:
         - name: {{ .Chart.Name }}-db
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.ImageRepo }}/demo-springboot_app:{{ .Values.ImageTag | default .Chart.AppVersion }}"
+          image: "mongo:3"
           imagePullPolicy: IfNotPresent
           ports:
             - name: mongo
               containerPort: 27017
               protocol: TCP
+          env:
+            - name: MONGO_INITDB_DATABASE
+              value: productDb
           livenessProbe:
             httpGet:
               path: /
