@@ -2,21 +2,15 @@
 Demo Java Springboot application on Kubernetes environment.
 
 [![](https://img.shields.io/badge/Owner-minhluantran017-darkviolet)](mailto:minhluantran017@gmail.com)
-![](https://img.shields.io/badge/-microservices-green)
-![](https://img.shields.io/badge/-Java-red)
-![](https://img.shields.io/badge/-Docker-blue)
-![](https://img.shields.io/badge/-Kubernetes-blue)
-![](https://img.shields.io/badge/-Jenkins-orange)
-![](https://img.shields.io/badge/-Helm-blue)
 
-***PROJECT STATUS:***
+![](https://img.shields.io/badge/Language-Java-red)
+![](https://img.shields.io/badge/Platform-Docker,Kubernetes-blue)
 
-- [x] Develop
-- [x] Build
-- [x] Bake
-- [x] Deploy
-- [ ] Test
-- [ ] Release
+![](https://img.shields.io/badge/Build-Maven-magenta)
+![](https://img.shields.io/badge/Deploy-Helm-orange)
+
+![](https://img.shields.io/badge/CI-Jenkins-green)
+![](https://img.shields.io/badge/CD-ArgoCD-blue)
 
 ## Getting Started
 
@@ -90,21 +84,15 @@ docker build -f build/docker/Dockerfile . -t demo-springboot:${VERSION_STRING}
 Push Docker image to Docker repository:
 ```sh
 # Log into the Docker repository
-### If you use Docker Hub...
-YOUR_REPO=minhluantran017
+DOCKER_REGISTRY=minhluantran017
 docker login
-
-### If you use AWS ECR (Elastic Container Registry)
-YOUR_REPO=xxxxx.dkr.ecr.<region>.amazonaws.com
-$(aws ecr get-login)
-
 
 # Tag your image
 docker tag demo-springboot:${VERSION_STRING} \
-    ${YOUR_REPO}/demo-springboot:${VERSION_STRING}
+    ${DOCKER_REGISTRY}/demo-springboot:${VERSION_STRING}
 
 # Push Docker image to repository:
-docker push ${YOUR_REPO}/demo-springboot:${VERSION_STRING}
+docker push ${DOCKER_REGISTRY}/demo-springboot:${VERSION_STRING}
 ```
 
 ### Deploying application
@@ -129,10 +117,11 @@ docker-compose -f deploy/docker-compose/compose.yml down -v
 
 #### Kubernetes cluster
 
-We use helm chart to deploy application onto Kubernetes.
+We use Helm chart to deploy application onto Kubernetes.
 
 ```sh
-helm install phone-price deploy/helm/demo-springboot/ \
+HELM_RELEASE_NAME=phone-price
+helm install ${HELM_RELEASE_NAME} deploy/helm/demo-springboot/ \
    --set ImageTag="${VERSION_STRING}"
 ```
 
@@ -140,9 +129,13 @@ Since this is for demo purpose only, we do not have Ingress.
 Port forwarding is the best choice:
 
 ```sh
-export POD_NAME=$(kubectl get pods --namespace default -l "app.kubernetes.io/name=demo-springboot,app.kubernetes.io/instance=productv2" -o jsonpath="{.items[0].metadata.name}")
+export POD_NAME=$(kubectl get pods --namespace default -l "app.kubernetes.io/name=demo-springboot,app.kubernetes.io/instance=${HELM_RELEASE_NAME}" -o jsonpath="{.items[0].metadata.name}")
 kubectl --namespace default port-forward ${POD_NAME} 8080:8080
 ```
+
+Then, these endpoints are accessible: 
+- http://localhost:8080/demo-springboot/api/v1/products
+- http://localhost:8080/demo-springboot/api/v2/products
 
 ### Running test suites
 
@@ -150,8 +143,8 @@ WIP
 
 ## CI/CD integration
 
-This project is configured for CI/CD on Jenkins.
-All configurations are under `ci` directory.
+This project is configured for CI/CD on Jenkins and ArgoCD.
+CI configurations are under `ci` directory.
 
 ## Branching
 
